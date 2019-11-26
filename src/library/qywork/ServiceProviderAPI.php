@@ -1,144 +1,224 @@
 <?php
+namespace api\qywork;
+
+use api\qywork\utils\Utils;
+use api\qywork\utils\HttpUtils;
+use api\qywork\model\SetSessionInfoReq;
+use api\qywork\model\GetPermanentCodeRsp;
+use api\qywork\model\GetAuthInfoRsp;
+use api\qywork\model\GetAdminListRsp;
+use api\qywork\model\GetUserinfoBy3rdRsp;
+use api\qywork\model\GetUserDetailBy3rdRsp;
+
 /*
  * Copyright (C) 2017 All rights reserved.
  *
- * @File ServiceProviderAPI.class.php
- * @Brief : Îª·þÎñÉÌ¿ª·ÅµÄ½Ó¿Ú, Ê¹ÓÃ·þÎñÉÌµÄtoken
+ * @File ServiceCorpAPI.class.php
+ * @Brief : ä¸ºæœåŠ¡å•†å¼€æ”¾çš„æŽ¥å£, ä½¿ç”¨åº”ç”¨æŽˆæƒçš„token
  * @Author abelzhu, abelzhu@tencent.com
  * @Version 1.0
  * @Date 2017-12-26
  *
  */
-namespace api\qywork;
-
-use api\qywork\utils\Utils;
-use api\qywork\utils\HttpUtils;
-use api\qywork\model\GetLoginInfoRsp;
-use api\qywork\model\GetRegisterCodeReq;
-use api\qywork\model\GetRegisterInfoRsp;
-use api\qywork\model\SetAgentScopeReq;
-use api\qywork\model\SetAgentScopeRsp;
-
-class ServiceProviderAPI extends AbsAPI
+class ServiceCorpAPI extends CorpAPI
 {
-    private $corpid = null; // string
-    private $provider_secret = null; // string
-    private $provider_access_token = null; // string
+    private $suite_id = null; // string
+    private $suite_secret = null; // string
+    private $suite_ticket = null; // string
+    
+    private $authCorpId = null; // string
+    private $permanentCode = null; // string
+    
+    private $suiteAccessToken = null; // string
+    
+    public function __construct(
+        $suite_id=null,
+        $suite_secret=null,
+        $suite_ticket=null,
+        $authCorpId=null,
+        $permanentCode=null)
+    {
+        $this->suite_id = $suite_id;
+        $this->suite_secret = $suite_secret;
+        $this->suite_ticket = $suite_ticket;
+        
+        // è°ƒç”¨ CorpAPI çš„functionï¼Œ éœ€è¦è®¾ç½®è¿™ä¸¤ä¸ªå‚æ•°
+        $this->authCorpId = $authCorpId;
+        $this->permanentCode = $permanentCode;
+    }
     
     /**
-     * µ÷ÓÃSetAgentScope/SetContactSyncSuccess Á½¸ö½Ó¿Ú¿ÉÒÔ²»ÓÃ´«corpid/provider_secret
+     * @brief RefreshAccessToken : override CorpAPIçš„å‡½æ•°ï¼Œä½¿ç”¨ä¸‰æ–¹æœåŠ¡å•†çš„get_corp_token
+     *
+     * @return : string
      */
-    public function __construct($corpid=null, $provider_secret=null)
+    protected function RefreshAccessToken()
     {
-        $this->corpid = $corpid;
-        $this->provider_secret = $provider_secret;
-    }
-    
-    protected function GetProviderAccessToken()
-    {
-        if ( ! Utils::notEmptyStr($this->provider_access_token)) {
-            $this->RefreshProviderAccessToken();
-        }
-        return $this->provider_access_token;
-    }
-    protected function RefreshProviderAccessToken()
-    {
-        Utils::checkNotEmptyStr($this->corpid, "corpid");
-        Utils::checkNotEmptyStr($this->provider_secret, "provider_secret");
-        
+        Utils::checkNotEmptyStr($this->authCorpId, "auth_corpid");
+        Utils::checkNotEmptyStr($this->permanentCode, "permanent_code");
         $args = array(
-            "corpid" => $this->corpid,
-            "provider_secret" => $this->provider_secret
+            "auth_corpid" => $this->authCorpId,
+            "permanent_code" => $this->permanentCode
         );
-        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_provider_token");
+        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_corp_token?suite_access_token=SUITE_ACCESS_TOKEN");
         $this->_HttpPostParseToJson($url, $args, false);
         $this->_CheckErrCode();
         
-        $this->provider_access_token = $this->rspJson["provider_access_token"];
+        $this->accessToken = $this->rspJson["access_token"];
     }
     
-    // ------------------------- µ¥µãµÇÂ¼ -------------------------------------
+    /**
+     * @brief GetSuiteAccessToken : èŽ·å–ç¬¬ä¸‰æ–¹åº”ç”¨å‡­è¯
+     *
+     * @link https://work.weixin.qq.com/api/doc#10975/èŽ·å–ç¬¬ä¸‰æ–¹åº”ç”¨å‡­è¯
+     *
+     * @note è°ƒç”¨è€…ä¸ç”¨å…³å¿ƒï¼Œæœ¬ç±»ä¼šè‡ªåŠ¨èŽ·å–ã€æ›´æ–°
+     *
+     * @return : string
+     */
+    protected function GetSuiteAccessToken()
+    {
+        if ( ! Utils::notEmptyStr($this->suiteAccessToken)) {
+            $this->RefreshSuiteAccessToken();
+        }
+        return $this->suiteAccessToken;
+    }
+    protected function RefreshSuiteAccessToken()
+    {
+        Utils::checkNotEmptyStr($this->suite_id, "suite_id");
+        Utils::checkNotEmptyStr($this->suite_secret, "suite_secret");
+        Utils::checkNotEmptyStr($this->suite_ticket, "suite_ticket");
+        $args = array(
+            "suite_id" => $this->suite_id,
+            "suite_secret" => $this->suite_secret,
+            "suite_ticket" => $this->suite_ticket,
+        );
+        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_suite_token");
+        $this->_HttpPostParseToJson($url, $args, false);
+        $this->_CheckErrCode();
+        
+        $this->suiteAccessToken= $this->rspJson["suite_access_token"];
+    }
+    
+    // ---------------------- ç¬¬ä¸‰æ–¹å¼€æ”¾æŽ¥å£ ----------------------------------
     //
-    
-    /**
-     * @brief GetLoginInfo : »ñÈ¡µÇÂ¼ÓÃ»§ÐÅÏ¢
-     *
-     * @link https://work.weixin.qq.com/api/doc#10991/»ñÈ¡µÇÂ¼ÓÃ»§ÐÅÏ¢
-     *
-     * @param $auth_code : string
-     *
-     * @return : GetLoginInfoRsp
-     */
-    public function GetLoginInfo($auth_code)
-    {
-        Utils::checkNotEmptyStr($auth_code, "auth_code");
-        $args = array("auth_code" => $auth_code);
-        self::_HttpCall(self::GET_LOGIN_INFO, 'POST', $args);
-        return  GetLoginInfoRsp::ParseFromArray($this->rspJson);
-    }
-    
-    // ------------------------- ×¢²á¶¨ÖÆ»¯ -----------------------------------
     //
     /**
-     * @brief GetRegisterCode : »ñÈ¡×¢²áÂë
+     * @brief GetPreAuthCode : èŽ·å–é¢„æŽˆæƒç 
      *
-     * @link https://work.weixin.qq.com/api/doc#11729/»ñÈ¡×¢²áÂë
+     * @link https://work.weixin.qq.com/api/doc#10975/èŽ·å–é¢„æŽˆæƒç 
      *
-     * @param $GetRegisterCodeReq
-     *
-     * @return : string register_code
+     * @return : string pre_auth_code
      */
-    public function GetRegisterCode(GetRegisterCodeReq $GetRegisterCodeReq)
+    public function GetPreAuthCode()
     {
-        $args = $GetRegisterCodeReq->FormatArgs();
-        self::_HttpCall(self::GET_REGISTER_CODE, 'POST', $args);
-        return $this->rspJson["register_code"];
+        self::_HttpCall(self::GET_PRE_AUTH_CODE, 'GET', null);
+        return $this->rspJson["pre_auth_code"];
     }
     
     /**
-     * @brief GetRegisterInfo : ²éÑ¯×¢²á×´Ì¬
+     * @brief SetSessionInfo : è®¾ç½®æŽˆæƒé…ç½®
      *
-     * @link https://work.weixin.qq.com/api/doc#11729/²éÑ¯×¢²á×´Ì¬
+     * @link https://work.weixin.qq.com/api/doc#10975/è®¾ç½®æŽˆæƒé…ç½®
      *
-     * @param $register_code : string
-     *
-     * @return : GetRegisterInfoRsp
+     * @param $SetSessionInfoReq
      */
-    public function GetRegisterInfo($register_code)
+    public function SetSessionInfo( SetSessionInfoReq $SetSessionInfoReq)
     {
-        Utils::checkNotEmptyStr($register_code, "register_code");
-        $args = array("register_code" => $register_code);
-        self::_HttpCall(self::GET_REGISTER_INFO, 'POST', $args);
-        return GetRegisterInfoRsp::ParseFromArray($this->rspJson);
+        $args = $SetSessionInfoReq->FormatArgs();
+        self::_HttpCall(self::SET_SESSION_INFO, 'POST', $args);
     }
     
     /**
-     * @brief SetAgentScope : ÉèÖÃÊÚÈ¨Ó¦ÓÃ¿É¼û·¶Î§
+     * @brief GetPermanentCode : èŽ·å–ä¼ä¸šæ°¸ä¹…æŽˆæƒç 
      *
-     * @link https://work.weixin.qq.com/api/doc#11729/ÉèÖÃÊÚÈ¨Ó¦ÓÃ¿É¼û·¶Î§
+     * @link https://work.weixin.qq.com/api/doc#10975/èŽ·å–ä¼ä¸šæ°¸ä¹…æŽˆæƒç 
      *
-     * @param $access_token : ¸Ã½Ó¿ÚÖ»ÄÜÊ¹ÓÃ×¢²áÍê³É»Øµ÷ÊÂ¼þ»òÕß²éÑ¯×¢²á×´Ì¬·µ»ØµÄaccess_token
-     * @param $SetAgentScopeReq : SetAgentScopeReq
+     * @param $temp_auth_code : string ä¸´æ—¶æŽˆæƒç 
      *
-     * @return : SetAgentScopeRsp
+     * @return : GetPermanentCodeRsp
      */
-    public function SetAgentScope($access_token, SetAgentScopeReq $SetAgentScopeReq)
+    public function GetPermanentCode($temp_auth_code)
     {
-        $args = $SetAgentScopeReq->FormatArgs();
-        self::_HttpCall(self::SET_AGENT_SCOPE."?access_token={$access_token}", 'POST', $args);
-        return  SetAgentScopeRsp::ParseFromArray($this->rspJson);
+        $args = array("auth_code" => $temp_auth_code);
+        self::_HttpCall(self::GET_PERMANENT_CODE, 'POST', $args);
+        return GetPermanentCodeRsp::ParseFromArray($this->rspJson);
     }
     
     /**
-     * @brief SetContactSyncSuccess : ÉèÖÃÍ¨Ñ¶Â¼Í¬²½Íê³É
+     * @brief GetAuthInfo : èŽ·å–ä¼ä¸šæŽˆæƒä¿¡æ¯
      *
-     * @link https://work.weixin.qq.com/api/doc#11729/ÉèÖÃÍ¨Ñ¶Â¼Í¬²½Íê³É
+     * @link https://work.weixin.qq.com/api/doc#10975/èŽ·å–ä¼ä¸šæŽˆæƒä¿¡æ¯
      *
-     * @param $access_token : ¸Ã½Ó¿ÚÖ»ÄÜÊ¹ÓÃ×¢²áÍê³É»Øµ÷ÊÂ¼þ»òÕß²éÑ¯×¢²á×´Ì¬·µ»ØµÄaccess_token
+     * @param $auth_corpid : string
+     * @param $permanent_code : æ°¸ä¹…æŽˆæƒç 
+     *
+     * @return : GetAuthInfoRsp
      */
-    public function SetContactSyncSuccess($access_token)
+    public function GetAuthInfo($auth_corpid, $permanent_code)
     {
-        self::_HttpCall(self::SET_CONTACT_SYNC_SUCCESS."?access_token={$access_token}", 'GET', null);
+        Utils::checkNotEmptyStr($auth_corpid, "auth_corpid");
+        Utils::checkNotEmptyStr($permanent_code, "permanent_code");
+        $args = array(
+            "auth_corpid" => $auth_corpid,
+            "permanent_code" => $permanent_code
+        );
+        self::_HttpCall(self::GET_AUTH_INFO, 'POST', $args);
+        return  GetAuthInfoRsp::ParseFromArray($this->rspJson);
+    }
+    
+    /**
+     * @brief GetAdminList : èŽ·å–åº”ç”¨çš„ç®¡ç†å‘˜åˆ—è¡¨
+     *
+     * @link https://work.weixin.qq.com/api/doc#10975/èŽ·å–åº”ç”¨çš„ç®¡ç†å‘˜åˆ—è¡¨
+     *
+     * @param $auth_corpid : string
+     * @param $agentid : uint
+     *
+     * @return  : GetAdminListRsp
+     */
+    public function GetAdminList($auth_corpid, $agentid)
+    {
+        Utils::checkNotEmptyStr($auth_corpid, "auth_corpid");
+        Utils::checkIsUInt($agentid, "agentid");
+        $args = array(
+            "auth_corpid" => $auth_corpid,
+            "agentid" => $agentid
+        );
+        self::_HttpCall(self::GET_ADMIN_LIST, 'POST', $args);
+        return GetAdminListRsp::ParseFromArray($this->rspJson);
+    }
+    
+    /**
+     * @brief GetUserinfoBy3rd :ç¬¬ä¸‰æ–¹æ ¹æ®codeèŽ·å–ä¼ä¸šæˆå‘˜ä¿¡æ¯
+     *
+     * @link https://work.weixin.qq.com/api/doc#10975/ç¬¬ä¸‰æ–¹æ ¹æ®codeèŽ·å–ä¼ä¸šæˆå‘˜ä¿¡æ¯
+     *
+     * @param $code : string
+     *
+     * @return  : GetUserinfoBy3rdRsp
+     */
+    public function GetUserinfoBy3rd($code)
+    {
+        self::_HttpCall(self::GET_USER_INFO_BY_3RD, 'GET', array('code'=>$code));
+        return GetUserinfoBy3rdRsp::ParseFromArray($this->rspJson);
+    }
+    
+    /**
+     * @brief GetUserDetailBy3rd : ç¬¬ä¸‰æ–¹ä½¿ç”¨user_ticketèŽ·å–æˆå‘˜è¯¦æƒ…
+     *
+     * @link https://work.weixin.qq.com/api/doc#10975/ç¬¬ä¸‰æ–¹ä½¿ç”¨user_ticketèŽ·å–æˆå‘˜è¯¦æƒ…
+     *
+     * @param $user_ticket : string
+     *
+     * @return  : GetUserDetailBy3rdRsp
+     */
+    public function GetUserDetailBy3rd($user_ticket)
+    {
+        Utils::checkNotEmptyStr($user_ticket, "user_ticket");
+        $args = array("user_ticket" => $user_ticket);
+        self::_HttpCall(self::GET_USER_DETAIL_BY_3RD, 'POST', $args);
+        return  GetUserDetailBy3rdRsp::ParseFromArray($this->rspJson);
     }
 }
 

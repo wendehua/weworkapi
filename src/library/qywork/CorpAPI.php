@@ -1,1132 +1,144 @@
 <?php
+/*
+ * Copyright (C) 2017 All rights reserved.
+ *
+ * @File ServiceProviderAPI.class.php
+ * @Brief : ä¸ºæœåŠ¡å•†å¼€æ”¾çš„æ¥å£, ä½¿ç”¨æœåŠ¡å•†çš„token
+ * @Author abelzhu, abelzhu@tencent.com
+ * @Version 1.0
+ * @Date 2017-12-26
+ *
+ */
 namespace api\qywork;
 
 use api\qywork\utils\Utils;
-use api\qywork\utils\ParameterError;
 use api\qywork\utils\HttpUtils;
-use api\qywork\model\User;
-use api\qywork\model\Department;
-use api\qywork\model\Tag;
-use api\qywork\model\BatchJobArgs;
-use api\qywork\model\Batch;
-use api\qywork\utils\QyApiError;
-use api\qywork\model\Agent;
-use api\qywork\model\Menu;
-use api\qywork\model\Message;
-use api\qywork\model\UserInfoByCode;
-use api\qywork\model\UserDetailByUserTicket;
-use api\qywork\utils\SysError;
-use api\qywork\model\BatchGetInvoiceInfoReq;
-use api\qywork\model\BatchUpdateInvoiceStatusReq;
-use api\qywork\model\QueryWorkWxRedpackReq;
-use api\qywork\model\PayWwSptrans2PocketReq;
-use api\qywork\model\CheckinOption;
-use api\qywork\model\CheckinDataList;
-use api\qywork\model\ApprovalDataList;
-use api\qywork\model\SendWorkWxRedpackReq;
+use api\qywork\model\GetLoginInfoRsp;
+use api\qywork\model\GetRegisterCodeReq;
+use api\qywork\model\GetRegisterInfoRsp;
+use api\qywork\model\SetAgentScopeReq;
+use api\qywork\model\SetAgentScopeRsp;
 
-class CorpAPI extends AbsAPI
+class ServiceProviderAPI extends AbsAPI
 {
-    private $corpId = null;
-    private $secret = null;
-    protected $accessToken = null;
+    private $corpid = null; // string
+    private $provider_secret = null; // string
+    private $provider_access_token = null; // string
     
     /**
-     * @brief __construct : ¹¹Ôìº¯Êı£¬
-     * @note ÆóÒµ½øĞĞ×Ô¶¨Òå¿ª·¢µ÷ÓÃ, Çë´«²Î corpid + secret, ²»ÓÃ¹ØĞÄaccesstoken£¬±¾Àà»á×Ô¶¯»ñÈ¡²¢Ë¢ĞÂ
+     * è°ƒç”¨SetAgentScope/SetContactSyncSuccess ä¸¤ä¸ªæ¥å£å¯ä»¥ä¸ç”¨ä¼ corpid/provider_secret
      */
-    public function __construct($corpId=null, $secret=null)
-    { 
-        Utils::checkNotEmptyStr($corpId, "corpid");
-        Utils::checkNotEmptyStr($secret, "secret");
-        
-        $this->corpId = $corpId;
-        $this->secret = $secret;
+    public function __construct($corpid=null, $provider_secret=null)
+    {
+        $this->corpid = $corpid;
+        $this->provider_secret = $provider_secret;
     }
     
-    
-    // ------------------------- access token ---------------------------------
-    /**
-     * @brief GetAccessToken : »ñÈ¡ accesstoken£¬²»ÓÃÖ÷¶¯µ÷ÓÃ
-     *
-     * @return : string accessToken
-     */
-    protected function GetAccessToken()
+    protected function GetProviderAccessToken()
     {
-        if ( ! Utils::notEmptyStr($this->accessToken)) {
-            $this->RefreshAccessToken();
+        if ( ! Utils::notEmptyStr($this->provider_access_token)) {
+            $this->RefreshProviderAccessToken();
         }
-        return $this->accessToken;
+        return $this->provider_access_token;
     }
-    
-    protected function RefreshAccessToken()
+    protected function RefreshProviderAccessToken()
     {
-        if (!Utils::notEmptyStr($this->corpId) || !Utils::notEmptyStr($this->secret))
-            throw new ParameterError("invalid corpid or secret");
-            
-            $url = HttpUtils::MakeUrl(
-                "/cgi-bin/gettoken?corpid={$this->corpId}&corpsecret={$this->secret}");
-            $this->_HttpGetParseToJson($url, false);
-            $this->_CheckErrCode();
-            
-            $this->accessToken = $this->rspJson["access_token"];
-    }
-    
-    // ------------------------- ³ÉÔ±¹ÜÀí -------------------------------------
-    //
-    /**
-     * @brief UserCreate : ´´½¨³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10018
-     *
-     * @param $user : User
-     */
-    public function UserCreate(User $user)
-    {
-        User::CheckUserCreateArgs($user);
-        $args = Utils::Object2Array($user);
-        self::_HttpCall(self::USER_CREATE, 'POST', $args);
-    }
-    
-    /**
-     * @brief UserGet : ¶ÁÈ¡³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10019
-     *
-     * @param $userid : string
-     *
-     * @return : User
-     */
-    public function UserGet($userid)
-    {
-        Utils::checkNotEmptyStr($userid, "userid");
-        self::_HttpCall(self::USER_GET, 'GET', array('userid' => $userid));
-        return User::Array2User($this->rspJson);
-    }
-    
-    /**
-     * @brief UserUpdate : ¸üĞÂ³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10020
-     *
-     * @param $user : User
-     */
-    public function UserUpdate(User $user)
-    {
-        User::CheckUserUpdateArgs($user);
-        $args = Utils::Object2Array($user);
-        self::_HttpCall(self::USER_UPDATE, 'POST', $args);
-    }
-    
-    /**
-     * @brief UserDelete : É¾³ı³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10030
-     *
-     * @param $userid : string
-     */
-    public function UserDelete($userid)
-    {
-        Utils::checkNotEmptyStr($userid, "userid");
-        self::_HttpCall(self::USER_DELETE, 'GET', array('userid' => $userid));
-    }
-    
-    /**
-     * @brief UserBatchDelete : ÅúÁ¿É¾³ı³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10060
-     *
-     * @param $userIdList : string array
-     *
-     */
-    public function UserBatchDelete(array $userIdList)
-    {
-        User::CheckUserBatchDeleteArgs($userIdList);
-        $args = array("useridlist" => $userIdList);
-        self::_HttpCall(self::USER_BATCH_DELETE, 'POST', $args);
-    }
-    
-    /**
-     * @brief UserSimpleList : »ñÈ¡²¿ÃÅ³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10061
-     *
-     * @param $departmentId : uint
-     * @param $fetchChild : 1/0 ÊÇ·ñµİ¹é»ñÈ¡×Ó²¿ÃÅÏÂÃæµÄ³ÉÔ±
-     *
-     * @return : User array
-     */
-    public function UserSimpleList($department_id, $fetchChild)
-    {
-        Utils::checkIsUInt($department_id, "department_id");
-        self::_HttpCall(self::USER_SIMPLE_LIST, 'GET', array('department_id'=>$department_id, 'fetch_child'=>$fetchChild));
-        return User::Array2UserList($this->rspJson);
-    }
-    
-    /**
-     * @brief UserList : »ñÈ¡²¿ÃÅ³ÉÔ±ÏêÇé
-     *
-     * @link https://work.weixin.qq.com/api/doc#10063
-     *
-     * @param $departmentId : uint
-     * @param $fetchChild : 1/0 ÊÇ·ñµİ¹é»ñÈ¡×Ó²¿ÃÅÏÂÃæµÄ³ÉÔ±
-     *
-     * @return
-     */
-    public function UserList($departmentId, $fetchChild)
-    {
-        Utils::checkIsUInt($departmentId, "departmentId");
-        self::_HttpCall(self::USER_LIST, 'GET', array('department_id'=>$departmentId, 'fetch_child'=>$fetchChild));
-        return User::Array2UserList($this->rspJson);
-    }
-    
-    /**
-     * @brief UserId2OpenId : userid×ªopenid
-     *
-     * @link https://work.weixin.qq.com/api/doc#11279
-     *
-     * @param $userid : input string
-     * @param $openId : output string
-     * @param $agentid : intput string
-     * @param $appId : output string
-     */
-    public function UserId2OpenId($userid, &$openId, $agentid = null, &$appId = null)
-    {
-        Utils::checkNotEmptyStr($userid, "userid");
-        if (is_null($agentid)) {
-            $args = array("userid" => $userid);
-        } else {
-            $args = array("userid" => $userid, "agentid" => $agentid);
-        }
-        self::_HttpCall(self::USERID_TO_OPENID, 'POST', $args);
-        $openId = Utils::arrayGet($this->rspJson, "openid");
-        $appId = Utils::arrayGet($this->rspJson, "appid");
-    }
-    
-    /**
-     * @brief openId2UserId : openid×ªuserid
-     *
-     * @link https://work.weixin.qq.com/api/doc#11279
-     *
-     * @param $openId : intput string
-     * @param $userid : output string
-     */
-    public function openId2UserId($openId, &$userid)
-    {
-        Utils::checkNotEmptyStr($openId, "openid");
-        $args = array("openid" => $openId);
-        self::_HttpCall(self::OPENID_TO_USERID, 'POST', $args);
-        $userid= Utils::arrayGet($this->rspJson, "userid");
-    }
-    
-    /**
-     * @brief UserAuthSuccess : ¶ş´ÎÑéÖ¤
-     *
-     * @link https://work.weixin.qq.com/api/doc#11378
-     *
-     * @param $userid : string
-     */
-    public function UserAuthSuccess($userid)
-    {
-        Utils::checkNotEmptyStr($userid, "userid");
-        self::_HttpCall(self::USER_AUTH_SUCCESS, 'GET', array('userid'=>$userid));
-    }
-    
-    // ------------------------- ²¿ÃÅ¹ÜÀí -------------------------------------
-    //
-    /**
-     * @brief DepartmentCreate : ´´½¨²¿ÃÅ
-     *
-     * @link https://work.weixin.qq.com/api/doc#10076
-     *
-     * @param $department : Department
-     *
-     * @return  : uint departmentId
-     */
-    public function DepartmentCreate(Department $department)
-    {
-        Department::CheckDepartmentCreateArgs($department);
-        $args = Department::Department2Array($department);
-        self::_HttpCall(self::DEPARTMENT_CREATE, 'POST', $args);
-        return Utils::arrayGet($this->rspJson, "id");
-    }
-    
-    /**
-     * @brief DepartmentUpdate : ¸üĞÂ²¿ÃÅ
-     *
-     * @link https://work.weixin.qq.com/api/doc#10077
-     *
-     * @param $department : Department
-     */
-    public function DepartmentUpdate(Department $department)
-    {
-        Department::CheckDepartmentUpdateArgs($department);
-        $args = Department::Department2Array($department);
-        self::_HttpCall(self::DEPARTMENT_UPDATE, 'POST', $args);
-    }
-    
-    /**
-     * @brief DepartmentDelete : É¾³ı²¿ÃÅ
-     *
-     * @link https://work.weixin.qq.com/api/doc#10079
-     *
-     * @param $departmentId : uint
-     */
-    public function DepartmentDelete($departmentId)
-    {
-        Utils::checkIsUInt($departmentId, "departmentId");
-        self::_HttpCall(self::DEPARTMENT_DELETE, 'GET', array('id'=>$departmentId));
-    }
-    
-    /**
-     * @brief DepartmentList : »ñÈ¡²¿ÃÅÁĞ±í
-     *
-     * @link https://work.weixin.qq.com/api/doc#10093
-     *
-     * @param $departmentId : uint, Èç¹û²»Ìî£¬Ä¬ÈÏ»ñÈ¡È«Á¿×éÖ¯¼Ü¹¹
-     *
-     * @return : Department array
-     */
-    public function DepartmentList($departmentId = null)
-    {
-        self::_HttpCall(self::DEPARTMENT_LIST, 'GET', array('id'=>$departmentId));
-        return Department::Array2DepartmentList($this->rspJson);
-    }
-    
-    //
-    // ------------------------- ±êÇ©¹ÜÀí -------------------------------------
-    //
-    /**
-     * @brief TagCreate : ´´½¨±êÇ©
-     *
-     * @link https://work.weixin.qq.com/api/doc#10915
-     *
-     * @param $tag : Tag
-     *
-     * @return : uint tagid
-     */
-    public function TagCreate(Tag $tag)
-    {
-        Tag::CheckTagCreateArgs($tag);
-        $args = Tag::Tag2Array($tag);
-        self::_HttpCall(self::TAG_CREATE, 'POST', $args);
-        return Utils::arrayGet($this->rspJson, "tagid");
-    }
-    
-    /**
-     * @brief TagUpdate : ¸üĞÂ±êÇ©Ãû×Ö
-     *
-     * @link https://work.weixin.qq.com/api/doc#10919
-     *
-     * @param $tag : Tag
-     */
-    public function TagUpdate(Tag $tag)
-    {
-        Tag::CheckTagUpdateArgs($tag);
-        $args = Tag::Tag2Array($tag);
-        self::_HttpCall(self::TAG_UPDATE, 'POST', $args);
-    }
-    
-    /**
-     * @brief TagDelete : É¾³ı±êÇ©
-     *
-     * @link https://work.weixin.qq.com/api/doc#10920
-     *
-     * @param $tagid : uint
-     */
-    public function TagDelete($tagid)
-    {
-        Utils::checkIsUInt($tagid, "tagid");
-        self::_HttpCall(self::TAG_DELETE, 'GET', array('tagid'=>$tagid));
-    }
-    
-    /**
-     * @brief TagGetUser : »ñÈ¡±êÇ©³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10921
-     *
-     * @param $tagid : uint
-     *
-     * @return  : Tag
-     */
-    public function TagGetUser($tagid)
-    {
-        Utils::checkIsUInt($tagid, "tagid");
-        self::_HttpCall(self::TAG_GET_USER, 'GET', array('tagid'=>$tagid));
-        return Tag::Array2Tag($this->rspJson);
-    }
-    
-    /**
-     * @brief TagAddUser : Ôö¼Ó±êÇ©³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10923
-     *
-     * @param $tagid : uint
-     * @param $userIdList : string array
-     * @param $partyIdList : uint array
-     * @param &$invalidUserIdList : output string array
-     * @param &$invalidPartyIdList : output uint array
-     *
-     * @note 1: userIdList/partyIdList ²»ÄÜÍ¬Ê±Îª¿Õ
-     * @note 2: Èç¹û´æÔÚ²»ºÏ·¨µÄ userid/partyid, ²»»áthrow Exception£¬µ«ÊÇ»áÌî³äinvalidUserIdList/invalidPartyIdList
-     */
-    public function TagAddUser($tagid, $userIdList=array(), $partyIdList=array(), &$invalidUserIdList, &$invalidPartyIdList)
-    {
-        Tag::CheckTagAddUserArgs($tagid, $userIdList, $partyIdList);
-        $args = Tag::ToTagAddUserArray($tagid, $userIdList, $partyIdList);
-        
-        self::_HttpCall(self::TAG_ADD_USER, 'POST', $args);
-        
-        $invalidUserIdList_string = utils::arrayGet($this->rspJson, "invalidlist");
-        $invalidUserIdList = explode('|',$invalidUserIdList_string);
-        $invalidPartyIdList = utils::arrayGet($this->rspJson, "invalidparty");
-    }
-    
-    /**
-     * @brief TagDeleteUser : É¾³ı±êÇ©³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10925
-     *
-     * @param $tagid : uint
-     * @param $userIdList : string array
-     * @param $partyIdList : uint array
-     * @param &$invalidUserIdList : output string array
-     * @param &$invalidPartyIdList : output uint array
-     *
-     * @note 1: userIdList/partyIdList ²»ÄÜÍ¬Ê±Îª¿Õ
-     * @note 2: Èç¹û´æÔÚ²»ºÏ·¨µÄ userid/partyid, ²»»áthrow Exception£¬µ«ÊÇ»áÌî³äinvalidUserIdList/invalidPartyIdList
-     */
-    public function TagDeleteUser($tagid, $userIdList, $partyIdList, &$invalidUserIdList, &$invalidPartyIdList)
-    {
-        Tag::CheckTagAddUserArgs($tagid, $userIdList, $partyIdList);
-        $args = Tag::ToTagAddUserArray($tagid, $userIdList, $partyIdList);
-        
-        self::_HttpCall(self::TAG_DELETE_USER, 'POST', $args);
-        
-        $invalidUserIdList_string = utils::arrayGet($this->rspJson, "invalidlist");
-        $invalidUserIdList = explode('|',$invalidUserIdList_string);
-        $invalidPartyIdList = utils::arrayGet($this->rspJson, "invalidparty");
-    }
-    
-    /**
-     * @brief TagGetList : »ñÈ¡±êÇ©ÁĞ±í
-     *
-     * @link https://work.weixin.qq.com/api/doc#10926
-     *
-     * @return  : Tag array
-     */
-    public function TagGetList()
-    {
-        self::_HttpCall(self::TAG_GET_LIST, 'GET', array());
-        return Tag::Array2TagList($this->rspJson);
-    }
-    
-    //
-    // ------------------------- Òì²½ÈÎÎñ -------------------------------------
-    //
-    
-    private function BatchJob(BatchJobArgs $batchJobArgs, $jobType)
-    {
-        Batch::CheckBatchJobArgs($batchJobArgs);
-        
-        $args = Utils::Object2Array($batchJobArgs);
-        
-        $url = HttpUtils::MakeUrl("/cgi-bin/batch/{$jobType}?access_token=ACCESS_TOKEN");
-        $this->_HttpPostParseToJson($url, $args);
-        $this->_CheckErrCode();
-        
-        return Utils::arrayGet($this->rspJson, "jobid");
-    }
-    
-    /**
-     * @brief BatchSyncUser : ÔöÁ¿¸üĞÂ³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10138/ÔöÁ¿¸üĞÂ³ÉÔ±
-     *
-     * @param $batchJobArgs : BatchJobArgs
-     *
-     * @return : string jobid
-     */
-    public function BatchSyncUser(BatchJobArgs $batchJobArgs)
-    {
-        return self::BatchJob($batchJobArgs, "syncuser");
-    }
-    
-    /**
-     * @brief BatchReplaceUser : È«Á¿¸²¸Ç³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#10138/È«Á¿¸²¸Ç³ÉÔ±
-     *
-     * @param $batchJobArgs : BatchJobArgs
-     *
-     * @return  : string jobid
-     */
-    public function BatchReplaceUser(BatchJobArgs $batchJobArgs)
-    {
-        return self::BatchJob($batchJobArgs, "replaceuser");
-    }
-    
-    /**
-     * @brief BatchReplaceParty : È«Á¿¸²¸Ç²¿ÃÅ
-     *
-     * @link https://work.weixin.qq.com/api/doc#10138/È«Á¿¸²¸Ç²¿ÃÅ
-     *
-     * @param $batchJobArgs : BatchJobArgs
-     *
-     * @return  : string jobid
-     */
-    public function BatchReplaceParty(BatchJobArgs $batchJobArgs)
-    {
-        return self::BatchJob($batchJobArgs, "replaceparty");
-    }
-    
-    /**
-     * @brief BatchJobGetResult : »ñÈ¡Òì²½ÈÎÎñ½á¹û
-     *
-     * @link https://work.weixin.qq.com/api/doc#10138/»ñÈ¡Òì²½ÈÎÎñ½á¹û
-     *
-     * @param $jobId : string
-     *
-     * @return  : BatchJobResult
-     */
-    public function BatchJobGetResult($jobId)
-    {
-        self::_HttpCall(self::BATCH_JOB_GET_RESULT, 'GET', array('jobid'=>$jobId));
-        return Batch::Array2BatchJobResult($this->rspJson);
-    }
-    
-    //
-    // ------------------------- ÑûÇë³ÉÔ± --------------------------------------
-    //
-    /**
-     * @brief BatchInvite : ÑûÇë³ÉÔ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#12543
-     *
-     * @param $userIdList : input string array
-     * @param $partyIdList : input uint array
-     * @param $tagIdList : input uint array
-     *
-     * @param $invalidUserIdList : output string array
-     * @param $invalidPartyIdList : output uint array
-     * @param $invalidTagIdList : output uint array
-     */
-    public function BatchInvite(
-        $userIdList=null, $partyIdList=null, $tagIdList=null,
-        &$invalidUserIdList, &$invalidPartyIdList, &$invalidTagIdList)
-    {
-        if (is_null($userIdList) && is_null($partyIdList) && is_null($tagIdList)) {
-            throw new QyApiError("input can not be all null");
-        }
-        $args = array('user'=>$userIdList, 'party'=>$partyIdList, 'tag'=>$tagIdList);
-        self::_HttpCall(self::BATCH_INVITE, 'POST', $args);
-        
-        $invalidUserIdList = Utils::arrayGet($this->rspJson, 'invaliduser');
-        $invalidPartyIdList = Utils::arrayGet($this->rspJson, 'invalidparty');
-        $invalidTagIdList = Utils::arrayGet($this->rspJson, 'invalidtag');
-    }
-    
-    //
-    // ------------------------- Ó¦ÓÃ¹ÜÀí --------------------------------------
-    //
-    /**
-     * @brief AgentGet : »ñÈ¡Ó¦ÓÃ
-     *
-     * @link https://work.weixin.qq.com/api/doc#10087
-     *
-     * @param $agentid : string
-     *
-     * @return  : Agent
-     */
-    public function AgentGet($agentid)
-    {
-        self::_HttpCall(self::AGENT_GET, 'GET', array('agentid'=>$agentid));
-        return Agent::Array2Agent($this->rspJson);
-    }
-    
-    /**
-     * @brief AgentSet : ÉèÖÃÓ¦ÓÃ
-     *
-     * @link https://work.weixin.qq.com/api/doc#10088
-     *
-     * @param $agent : Agent
-     */
-    public function AgentSet($agent)
-    {
-        Agent::CheckAgentSetArgs($agent);
-        $args = Agent::Agent2Array($agent);
-        self::_HttpCall(self::AGENT_SET, 'POST', $args);
-    }
-    
-    /**
-     * @brief AgentList : »ñÈ¡Ó¦ÓÃÁĞ±í
-     *
-     * @link https://work.weixin.qq.com/api/doc#11214
-     *
-     * @return : AgentList
-     */
-    public function AgentGetList()
-    {
-        self::_HttpCall(self::AGENT_GET_LIST, 'GET', array());
-        return Agent::Array2AgentList($this->rspJson);
-    }
-    
-    //
-    // ------------------------- ×Ô¶¨Òå²Ëµ¥ -----------------------------------
-    //
-    //
-    /**
-     * @brief MenuCreate : ´´½¨²Ëµ¥
-     *
-     * @link https://work.weixin.qq.com/api/doc#10786
-     *
-     * @param $agentid : uint
-     * @param $menu : Menu
-     */
-    public function MenuCreate($agentid, Menu $menu)
-    {
-        Menu::CheckMenuCreateArgs($agentid, $menu);
-        $args = Utils::Object2Array($menu);
-        self::_HttpCall(self::MENU_CREATE."&agentid={$agentid}", 'POST', $args);
-    }
-    
-    /**
-     * @brief MenuGet : »ñÈ¡²Ëµ¥
-     *
-     * @link https://work.weixin.qq.com/api/doc#10787
-     *
-     * @param $agentid : string
-     *
-     * @return : Menu
-     */
-    public function MenuGet($agentid)
-    {
-        self::_HttpCall(self::MENU_GET, 'GET', array('agentid'=>$agentid));
-        return Menu::Array2Menu($this->rspJson);
-    }
-    
-    /**
-     * @brief MenuGet : É¾³ı²Ëµ¥
-     *
-     * @link https://work.weixin.qq.com/api/doc#10788
-     *
-     * @param $agentid : string
-     */
-    public function MenuDelete($agentid)
-    {
-        self::_HttpCall(self::MENU_DELETE, 'GET', array('agentid'=>$agentid));
-    }
-    
-    //
-    // --------------------------- ÏûÏ¢ÍÆËÍ -----------------------------------
-    //
-    //
-    /**
-     * @brief MessageSend : ·¢ËÍÏûÏ¢
-     *
-     * @link https://work.weixin.qq.com/api/doc#10167
-     *
-     * @param $message : Message
-     * @param $invalidUserIdList : string array
-     * @param $invalidPartyIdList : uint array
-     * @param $invalidTagIdList : uint array
-     *
-     * @return
-     */
-    public function MessageSend(Message $message, &$invalidUserIdList, &$invalidPartyIdList, &$invalidTagIdList)
-    {
-        $message->CheckMessageSendArgs();
-        $args = $message->Message2Array();
-        
-        self::_HttpCall(self::MESSAGE_SEND, 'POST', $args);
-        
-        $invalidUserIdList_string = utils::arrayGet($this->rspJson, "invaliduser");
-        $invalidUserIdList = explode('|', $invalidUserIdList_string);
-        
-        $invalidPartyIdList_string = utils::arrayGet($this->rspJson, "invalidparty");
-        $temp = explode('|', $invalidPartyIdList_string);
-        foreach($temp as $item) {
-            $invalidPartyIdList[] = intval($item);
-        }
-        
-        $invalidTagIdList_string = utils::arrayGet($this->rspJson, "invalidtag");
-        $temp = explode('|', $invalidTagIdList_string);
-        foreach($temp as $item) {
-            $invalidTagIdList[] = intval($item);
-        }
-    }
-    //
-    // --------------------------- ËØ²Ä¹ÜÀí -----------------------------------
-    //
-    //
-    /**
-     * @brief MediaUpload : ÉÏ´«ÁÙÊ±ËØ²Ä
-     *
-     * @link https://work.weixin.qq.com/api/doc#10112
-     *
-     * @param $filePath : string, ÎÄ¼şÂ·¾¶
-     * @param $type : string, Ã½ÌåÎÄ¼şÀàĞÍ£¬·Ö±ğÓĞÍ¼Æ¬£¨image£©¡¢ÓïÒô£¨voice£©¡¢ÊÓÆµ£¨video£©£¬ÆÕÍ¨ÎÄ¼ş£¨file£©
-     *
-     * @return : string media_id
-     */
-    public function MediaUpload($filePath, $type)
-    {
-        Utils::checkNotEmptyStr($filePath, "filePath");
-        Utils::checkNotEmptyStr($type, "type");
-        if ( ! file_exists($filePath)) {
-            throw new QyApiError("file not exists");
-        }
-        
-        // ¼æÈİphp5.3-5.6 curlÄ£¿éµÄÉÏ´«²Ù×÷
-        $args = array();
-        if (class_exists('\CURLFile')) {
-            $args = array('media' => new \CURLFile(realpath($filePath), 'application/octet-stream', basename($filePath)));
-        } else {
-            $args = array('media' => '@' . realpath($filePath));
-        }
-        
-        $url = HttpUtils::MakeUrl("/cgi-bin/media/upload?access_token=ACCESS_TOKEN&type={$type}");
-        $this->_HttpPostParseToJson($url, $args, true, true/*isPostFile*/);
-        $this->_CheckErrCode();
-        
-        return $this->rspJson["media_id"];
-    }
-    
-    public function MediaUploadByBuffer($buffer, $type)
-    {
-        $tmpPath = self::WriteTmpFile($buffer);
-        
-        try {
-            $ret = $this->mediaUpload($tmpPath, $type);
-            unlink($tmpPath);
-            return $ret;
-        }
-        catch (\Exception $ex) {
-            unlink($tmpPath);
-            throw $ex;
-        }
-    }
-    
-    /**
-     * @brief MediaGet : »ñÈ¡ÁÙÊ±ËØ²Ä
-     *
-     * @link https://work.weixin.qq.com/api/doc#10115
-     *
-     * @param $media_id : string
-     *
-     * @return : string
-     */
-    public function MediaGet($media_id)
-    {
-        Utils::checkNotEmptyStr($media_id, "media_id");
-        self::_HttpCall(self::MEDIA_GET, 'GET', array('media_id'=>$media_id));
-        return $this->rspRawStr;
-    }
-    
-    /**
-     * @brief MediaGet : ÉÏ´«ÓÀ¾ÃÍ¼Æ¬
-     *
-     * @link https://work.weixin.qq.com/api/doc#13219
-     *
-     * @param $filePath : string, Í¼Æ¬ÎÄ¼şÂ·¾¶
-     * @param $md5 : string, Í¼Æ¬ÎÄ¼şµÄmd5.¿ÉÒÔ²»Ìî
-     *
-     * @return : string¡£ÉÏ´«Í¼Æ¬ºó£¬µÃµ½µÄÍ¼Æ¬ÓÀ¾ÃURL¡£×¢Òâ½öÄÜÓÃÓÚÍ¼ÎÄÏûÏ¢£¨mpnews£©ÕıÎÄÖĞµÄÍ¼Æ¬Õ¹Ê¾
-     */
-    public function UploadImage($filePath, $md5=null)
-    {
-        Utils::checkNotEmptyStr($filePath, "filePath");
-        if ( ! file_exists($filePath)) {
-            throw new QyApiError("file not exists");
-        }
-        
-        // ¼æÈİphp5.3-5.6 curlÄ£¿éµÄÉÏ´«²Ù×÷
-        $args = array();
-        if (class_exists('\CURLFile')) {
-            $args = array('media' => new \CURLFile(realpath($filePath), 'application/octet-stream', basename($filePath)));
-        } else {
-            $args = array('media' => '@' . $filePath);//realpath($filePath));
-        }
-        
-        var_dump($args);
-        
-        $url = HttpUtils::MakeUrl("/cgi-bin/media/uploadimg?access_token=ACCESS_TOKEN");
-        if ($md5 != null) {
-            $url = $url . "&md5={$md5}";
-        }
-        
-        $this->_HttpPostParseToJson($url, $args, true, true/*isPostFile*/);
-        $this->_CheckErrCode();
-        
-        return $this->rspJson["url"];
-    }
-    
-    //
-    // --------------------------- Éí·İÑéÖ¤ -----------------------------------
-    //
-    //
-    /**
-     * @brief GetUserInfoByCode : ¸ù¾İcode»ñÈ¡³ÉÔ±ĞÅÏ¢
-     *
-     * @link https://work.weixin.qq.com/api/doc#10028/¸ù¾İcode»ñÈ¡³ÉÔ±ĞÅÏ¢
-     *
-     * @param $code : string
-     *
-     * @return : UserInfoByCode
-     */
-    public function GetUserInfoByCode($code)
-    {
-        Utils::checkNotEmptyStr($code, "code");
-        self::_HttpCall(self::GET_USER_INFO_BY_CODE, 'GET', array('code'=>$code));
-        return  UserInfoByCode::Array2UserInfoByCode($this->rspJson);
-    }
-    
-    /**
-     * @brief GetUserDetailByUserTicket : Ê¹ÓÃuser_ticket»ñÈ¡³ÉÔ±ÏêÇé
-     *
-     * @link https://work.weixin.qq.com/api/doc#10028/Ê¹ÓÃuser_ticket»ñÈ¡³ÉÔ±ÏêÇé
-     *
-     * @param $ticket : string
-     *
-     * @return : UserDetailByUserTicket
-     */
-    public function GetUserDetailByUserTicket($ticket)
-    {
-        Utils::checkNotEmptyStr($ticket, "ticket");
-        $args = array("user_ticket" => $ticket);
-        self::_HttpCall(self::GET_USER_DETAIL, 'POST', $args);
-        return UserDetailByUserTicket::Array2UserDetailByUserTicket($this->rspJson);
-    }
-    
-    //
-    // ---------------------- ÒÆ¶¯¶ËSDK ---------------------------------------
-    //
-    //
-    /**
-     * @brief TicketGet : »ñÈ¡µç×Ó·¢Æ±ticket
-     *
-     * @link https://work.weixin.qq.com/api/doc#10029/»ñÈ¡µç×Ó·¢Æ±ticket
-     *
-     * @return : string ticket
-     */
-    public function TicketGet()
-    {
-        self::_HttpCall(self::GET_TICKET, 'GET', array('type'=>'wx_card'));
-        return $this->rspJson["ticket"];
-    }
-    
-    /**
-     * @brief JsApiTicketGet : »ñÈ¡jsapi_ticket
-     *
-     * @link https://work.weixin.qq.com/api/doc#10029/»ñÈ¡jsapi_ticket
-     *
-     * @return : string ticket
-     */
-    public function JsApiTicketGet()
-    {
-        self::_HttpCall(self::GET_JSAPI_TICKET, 'GET', array());
-        return $this->rspJson["ticket"];
-    }
-    
-    /**
-     * @brief JsApiSignatureGet : ¼ÆËãjsapiµÄÇ©Ãû
-     *
-     * @link https://work.weixin.qq.com/api/doc#10029/%E7%AD%BE%E5%90%8D%E7%AE%97%E6%B3%95
-     *
-     * @param $jsapiTicket : string
-     * @param $nonceStr : string
-     * @param $timestamp : string
-     * @param $url : string
-     *
-     * @return : string ticket
-     */
-    public function JsApiSignatureGet($jsapiTicket, $nonceStr, $timestamp, $url)
-    {
-        $string = "jsapi_ticket=$jsapiTicket&noncestr=$nonceStr&timestamp=$timestamp&url=$url";
-        return sha1($string);
-    }
-    
-    //
-    // ---------------------- OAÊı¾İ½Ó¿Ú --------------------------------------
-    //
-    //
-    /**
-     * @brief CheckinOptionGet : »ñÈ¡´ò¿¨¹æÔò
-     *
-     * @link https://work.weixin.qq.com/api/doc#12423
-     *
-     * @param $datetime : uint
-     * @param $useridlist : string array
-     *
-     * @return  : CheckinOption
-     */
-    public function CheckinOptionGet($datetime, $useridlist)
-    {
-        Utils::checkIsUInt($datetime, "datetime");
-        Utils::checkNotEmptyArray($useridlist, "useridlist");
-        if (count($useridlist) > 100) throw new QyApiError("no more than 100 user once");
-        $args = array("datetime" => $datetime, "useridlist" => $useridlist);
-        
-        self::_HttpCall(self::GET_CHECKIN_OPTION, 'POST', $args);
-        
-        return CheckinOption::ParseFromArray($this->rspJson);
-    }
-    
-    /**
-     * @brief CheckinDataGet : »ñÈ¡´ò¿¨Êı¾İ
-     *
-     * @link https://work.weixin.qq.com/api/doc#11196
-     *
-     * @param $opencheckindatatype : uint
-     * @param $starttime : uint
-     * @param $endtime : uint
-     * @param $useridlist : string array
-     *
-     * @return  : CheckinDataList
-     */
-    public function CheckinDataGet($opencheckindatatype, $starttime, $endtime, $useridlist)
-    {
-        Utils::checkIsUInt($opencheckindatatype, "opencheckindatatype");
-        Utils::checkIsUInt($starttime, "starttime");
-        Utils::checkIsUInt($endtime, "endtime");
-        Utils::checkNotEmptyArray($useridlist, "useridlist");
-        if (count($useridlist) > 100) throw new QyApiError("no more than 100 user once");
+        Utils::checkNotEmptyStr($this->corpid, "corpid");
+        Utils::checkNotEmptyStr($this->provider_secret, "provider_secret");
         
         $args = array(
-            "opencheckindatatype" => $opencheckindatatype,
-            "starttime" => $starttime,
-            "endtime" => $endtime,
-            "useridlist" => $useridlist,
+            "corpid" => $this->corpid,
+            "provider_secret" => $this->provider_secret
         );
-        self::_HttpCall(self::GET_CHECKIN_DATA, 'POST', $args);
-        return CheckinDataList::ParseFromArray($this->rspJson);
-    }
-    
-    /**
-     * @brief ApprovalDataGet : »ñÈ¡ÉóÅúÊı¾İ
-     *
-     * @link https://work.weixin.qq.com/api/doc#11228
-     *
-     * @param $starttime : uint
-     * @param $endtime : uint
-     * @param $next_spnum : uint
-     *
-     * @return  : ApprovalDataList
-     */
-    public function ApprovalDataGet($starttime, $endtime, $next_spnum=null)
-    {
-        Utils::checkIsUInt($starttime, "starttime");
-        Utils::checkIsUInt($endtime, "endtime");
+        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_provider_token");
+        $this->_HttpPostParseToJson($url, $args, false);
+        $this->_CheckErrCode();
         
-        $args = array();
-        Utils::setIfNotNull($starttime, "starttime", $args);
-        Utils::setIfNotNull($endtime, "endtime", $args);
-        Utils::setIfNotNull($next_spnum, "next_spnum", $args);
-        
-        self::_HttpCall(self::GET_APPROVAL_DATA, 'POST', $args);
-        return  ApprovalDataList::ParseFromArray($this->rspJson);
+        $this->provider_access_token = $this->rspJson["provider_access_token"];
     }
     
-    //
-    // ---------------------- ÆóÒµÖ§¸¶ ----------------------------------------
-    //
-    static private function _HttpPostXml($url, $args)
-    {
-        $postData = Utils::Array2Xml("xml", $args);
-        $this->rspRawStr = HttpUtils::httpPost($url, $postData);
-        return Utils::Xml2Array($this->rspRawStr);
-    }
-    static private function _CheckXmlRetCode($rsp)
-    {
-        if ($rsp["return_code"] != "SUCCESS") {
-            throw new QyApiError("response error:" . $rsp);
-        }
-    }
-    
-    /**
-     * @brief SendWorkWxRedpack : ·¢·ÅÆóÒµºì°ü
-     *
-     * @link https://work.weixin.qq.com/api/doc#11543
-     *
-     * @param $SendWorkWxRedpackReq
-     *
-     * @return : SendWorkWxRedpackRsp
-     *
-     * @note : ±¾½Ó¿ÚÖ»¼ì²éÍ¨ĞÅÊÇ·ñÕı³££¬ÒµÎñ½á¹ûĞèµ÷ÓÃ·½×ÔĞĞÅĞ¶Ï£¬²Î¿´ÎÄµµ
-     */
-    static public function SendWorkWxRedpack( SendWorkWxRedpackReq $SendWorkWxRedpackReq)
-    {
-        $url = "https://api.mch.weixin.qq.com/mmpaymkttransfers/sendworkwxredpack";
-        $args = Utils::Object2Array($SendWorkWxRedpackReq);
-        $SendWorkWxRedpackRsp = self::_HttpPostXml($url, $args);
-        self::_CheckXmlRetCode($SendWorkWxRedpackRsp);
-        return $SendWorkWxRedpackRsp;
-    }
-    
-    /**
-     * @brief QueryWorkWxRedpack : ²éÑ¯ºì°ü¼ÇÂ¼
-     *
-     * @link https://work.weixin.qq.com/api/doc#11544
-     *
-     * @param $QueryWorkWxRedpackReq
-     *
-     * @return : QueryWorkWxRedpackRsp
-     */
-    static public function QueryWorkWxRedpack(QueryWorkWxRedpackReq $QueryWorkWxRedpackReq)
-    {
-        $url = "https://api.mch.weixin.qq.com/mmpaymkttransfers/queryworkwxredpack";
-        $args = Utils::Object2Array($QueryWorkWxRedpackReq);
-        $QueryWorkWxRedpackRsp = self::_HttpPostXml($url, $args);
-        self::_CheckXmlRetCode($QueryWorkWxRedpackRsp);
-        return $QueryWorkWxRedpackRsp;
-    }
-    
-    /**
-     * @brief PayWwSptrans2Pocket : ÏòÔ±¹¤¸¶¿î
-     *
-     * @link https://work.weixin.qq.com/api/doc#11545
-     *
-     * @param $PayWwSptrans2PocketReq
-     *
-     * @return : PayWwSptrans2PocketRsp
-     */
-    static public function PayWwSptrans2Pocket(PayWwSptrans2PocketReq $PayWwSptrans2PocketReq)
-    {
-        $url = "https://api.mch.weixin.qq.com/mmpaymkttransfers/promotion/paywwsptrans2pocket";
-        $args = Utils::Object2Array($PayWwSptrans2PocketReq);
-        $PayWwSptrans2PocketRsp = self::_HttpPostXml($url, $args);
-        self::_CheckXmlRetCode($PayWwSptrans2PocketRsp);
-        return $PayWwSptrans2PocketRsp;
-    }
-    
-    /**
-     * @brief QueryWwSptrans2Pocket : ²éÑ¯¸¶¿î¼ÇÂ¼
-     *
-     * @link https://work.weixin.qq.com/api/doc#11546
-     *
-     * @param $QueryWwSptrans2PocketReq
-     *
-     * @return : QueryWwSptrans2Pocketsp
-     */
-/*     static public function QueryWwSptrans2Pocket(QueryWwSptrans2PocketReq $QueryWwSptrans2PocketReq)
-    {
-        $url = "https://api.mch.weixin.qq.com/mmpaymkttransfers/promotion/querywwsptrans2pocket";
-        $args = Utils::Object2Array($QueryWwSptrans2PocketReq);
-        $QueryWwSptrans2Pocketsp = self::_HttpPostXml($url, $args);
-        self::_CheckXmlRetCode($QueryWwSptrans2Pocketsp);
-        return $QueryWwSptrans2Pocketsp;
-    } */
-    //
-    // ---------------------- µç×Ó·¢Æ± ----------------------------------------
-    //
-    //
-    /**
-     * @brief GetInvoiceInfo : ²éÑ¯µç×Ó·¢Æ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#11631
-     *
-     * @param $card_id : string
-     * @param $encrypt_code : string
-     *
-     * @return : InvoiceInfo
-     */
-    public function GetInvoiceInfo($card_id, $encrypt_code)
-    {
-        Utils::checkNotEmptyStr($card_id, "card_id");
-        Utils::checkNotEmptyStr($encrypt_code, "encrypt_code");
-        $args = array("card_id" => $card_id, "encrypt_code" => $encrypt_code);
-        self::_HttpCall(self::GET_INVOICE_INFO, 'POST', $args);
-        return Utils::Array2Object($this->rspJson);
-    }
-    
-    /**
-     * @brief UpdateInvoiceStatus : ¸üĞÂ·¢Æ±×´Ì¬
-     *
-     * @link https://work.weixin.qq.com/api/doc#11633
-     *
-     * @param $card_id : string
-     * @param $encrypt_code : string
-     * @param $reimburse_status : string
-     *
-     * @return
-     */
-    public function UpdateInvoiceStatus($card_id, $encrypt_code, $reimburse_status)
-    {
-        Utils::checkNotEmptyStr($card_id, "card_id");
-        Utils::checkNotEmptyStr($encrypt_code, "encrypt_code");
-        Utils::checkNotEmptyStr($reimburse_status, "reimburse_status");
-        $args = array("card_id" => $card_id, "encrypt_code" => $encrypt_code, "reimburse_status" => $reimburse_status);
-        self::_HttpCall(self::UPDATE_INVOICE_STATUS, 'POST', $args);
-    }
-    
-    /**
-     * @brief BatchUpdateInvoiceStatus : ÅúÁ¿¸üĞÂ·¢Æ±×´Ì¬
-     *
-     * @link https://work.weixin.qq.com/api/doc#11634
-     *
-     * @param $BatchUpdateInvoiceStatusReq
-     *
-     */
-    public function BatchUpdateInvoiceStatus(BatchUpdateInvoiceStatusReq $BatchUpdateInvoiceStatusReq)
-    {
-        $args = Utils::Object2Array($BatchUpdateInvoiceStatusReq);
-        self::_HttpCall(self::BATCH_UPDATE_INVOICE_STATUS, 'POST', $args);
-    }
-    
-    /**
-     * @brief BatchGetInvoiceInfo : ÅúÁ¿²éÑ¯µç×Ó·¢Æ±
-     *
-     * @link https://work.weixin.qq.com/api/doc#11974
-     *
-     * @param $BatchGetInvoiceInfoReq
-     *
-     * @return : BatchGetInvoiceInfoRsp
-     */
-    public function BatchGetInvoiceInfo( BatchGetInvoiceInfoReq $BatchGetInvoiceInfoReq)
-    {
-        $args = Utils::Object2Array($BatchGetInvoiceInfoReq);
-        self::_HttpCall(self::BATCH_GET_INVOICE_INFO, 'POST', $args);
-        return Utils::Array2Object($this->rspJson);
-    }
-    
-    //
-    // ------------------------- private --------------------------------------
+    // ------------------------- å•ç‚¹ç™»å½• -------------------------------------
     //
     
-    static private function WriteTmpFile($buffer)
+    /**
+     * @brief GetLoginInfo : è·å–ç™»å½•ç”¨æˆ·ä¿¡æ¯
+     *
+     * @link https://work.weixin.qq.com/api/doc#10991/è·å–ç™»å½•ç”¨æˆ·ä¿¡æ¯
+     *
+     * @param $auth_code : string
+     *
+     * @return : GetLoginInfoRsp
+     */
+    public function GetLoginInfo($auth_code)
     {
-        Utils::checkNotEmptyStr($buffer, "buffer");
-        
-        $tmpPath = tempnam(sys_get_temp_dir(), "qytmpfile");
-        $handle = null;
-        
-        try {
-            $handle = fopen($tmpPath, "wb");
-            if ($handle === false) {
-                throw new SysError("create tmp file failed");
-            }
-            
-            $writeBytes = fwrite($handle, $buffer);
-            if ($writeBytes === false) {
-                throw new SysError("write tmp file failed");
-            }
-            while ($writeBytes < count($buffer)) {
-                $n = fwrite($handle, substr($buffer, $writeBytes));
-                if ($n === false) {
-                    throw new SysError("write tmp file failed");
-                }
-                $writeBytes += $n;
-            }
-            fclose($handle);
-        }
-        catch (\Exception $ex) {
-            if (!is_null($handle)) {
-                fclose($handle);
-                unlink($tmpPath);
-            }
-            throw $ex;
-        }
-        return $tmpPath;
+        Utils::checkNotEmptyStr($auth_code, "auth_code");
+        $args = array("auth_code" => $auth_code);
+        self::_HttpCall(self::GET_LOGIN_INFO, 'POST', $args);
+        return  GetLoginInfoRsp::ParseFromArray($this->rspJson);
+    }
+    
+    // ------------------------- æ³¨å†Œå®šåˆ¶åŒ– -----------------------------------
+    //
+    /**
+     * @brief GetRegisterCode : è·å–æ³¨å†Œç 
+     *
+     * @link https://work.weixin.qq.com/api/doc#11729/è·å–æ³¨å†Œç 
+     *
+     * @param $GetRegisterCodeReq
+     *
+     * @return : string register_code
+     */
+    public function GetRegisterCode(GetRegisterCodeReq $GetRegisterCodeReq)
+    {
+        $args = $GetRegisterCodeReq->FormatArgs();
+        self::_HttpCall(self::GET_REGISTER_CODE, 'POST', $args);
+        return $this->rspJson["register_code"];
+    }
+    
+    /**
+     * @brief GetRegisterInfo : æŸ¥è¯¢æ³¨å†ŒçŠ¶æ€
+     *
+     * @link https://work.weixin.qq.com/api/doc#11729/æŸ¥è¯¢æ³¨å†ŒçŠ¶æ€
+     *
+     * @param $register_code : string
+     *
+     * @return : GetRegisterInfoRsp
+     */
+    public function GetRegisterInfo($register_code)
+    {
+        Utils::checkNotEmptyStr($register_code, "register_code");
+        $args = array("register_code" => $register_code);
+        self::_HttpCall(self::GET_REGISTER_INFO, 'POST', $args);
+        return GetRegisterInfoRsp::ParseFromArray($this->rspJson);
+    }
+    
+    /**
+     * @brief SetAgentScope : è®¾ç½®æˆæƒåº”ç”¨å¯è§èŒƒå›´
+     *
+     * @link https://work.weixin.qq.com/api/doc#11729/è®¾ç½®æˆæƒåº”ç”¨å¯è§èŒƒå›´
+     *
+     * @param $access_token : è¯¥æ¥å£åªèƒ½ä½¿ç”¨æ³¨å†Œå®Œæˆå›è°ƒäº‹ä»¶æˆ–è€…æŸ¥è¯¢æ³¨å†ŒçŠ¶æ€è¿”å›çš„access_token
+     * @param $SetAgentScopeReq : SetAgentScopeReq
+     *
+     * @return : SetAgentScopeRsp
+     */
+    public function SetAgentScope($access_token, SetAgentScopeReq $SetAgentScopeReq)
+    {
+        $args = $SetAgentScopeReq->FormatArgs();
+        self::_HttpCall(self::SET_AGENT_SCOPE."?access_token={$access_token}", 'POST', $args);
+        return  SetAgentScopeRsp::ParseFromArray($this->rspJson);
+    }
+    
+    /**
+     * @brief SetContactSyncSuccess : è®¾ç½®é€šè®¯å½•åŒæ­¥å®Œæˆ
+     *
+     * @link https://work.weixin.qq.com/api/doc#11729/è®¾ç½®é€šè®¯å½•åŒæ­¥å®Œæˆ
+     *
+     * @param $access_token : è¯¥æ¥å£åªèƒ½ä½¿ç”¨æ³¨å†Œå®Œæˆå›è°ƒäº‹ä»¶æˆ–è€…æŸ¥è¯¢æ³¨å†ŒçŠ¶æ€è¿”å›çš„access_token
+     */
+    public function SetContactSyncSuccess($access_token)
+    {
+        self::_HttpCall(self::SET_CONTACT_SYNC_SUCCESS."?access_token={$access_token}", 'GET', null);
     }
 }
 
