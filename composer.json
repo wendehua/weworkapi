@@ -1,0 +1,22 @@
+{
+	"name" : "wendehua/weworkapi",
+	"description" : "qy weixin api",
+	"type" : "library",
+	"license" : "MIT",
+	"authors" : [{
+			"name" : "wendehua",
+			"email" : "376503128@qq.com"
+		}
+	],
+	"minimum-stability" : "stable",
+	"require" : {
+		"php" : ">=5.6"
+	},
+	"autoload" : {
+		"psr-4" : {
+			"api\\qywork\\" : "src/library/qywork",
+			"api\\qywork\\utils\\" :"src/library/qywork/utils"
+		
+		}
+	}
+}
