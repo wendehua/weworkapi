@@ -13,11 +13,12 @@
 		"php" : ">=5.6"
 	},
 	"autoload" : {
+		"classmap":[
+          "api/qywork/model",
+		  "api/qywork/utils"
+        ],
 		"psr-4" : {
-			"api\\qywork\\" : "src/library/qywork",
-			"api\\qywork\\utils\\" : "src/library/qywork/utils",
-			"api\\qywork\\model\\" : "src/library/qywork/datastructure"
-			
-		}
+			"api\\qywork\\" : "src/qywork"  
+		} 
 	}
 }
