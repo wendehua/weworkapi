@@ -1,224 +1,144 @@
 <?php
-namespace api\qywork;
-
-use api\qywork\utils\Utils;
-use api\qywork\utils\HttpUtils;
-use api\qywork\model\SetSessionInfoReq;
-use api\qywork\model\GetPermanentCodeRsp;
-use api\qywork\model\GetAuthInfoRsp;
-use api\qywork\model\GetAdminListRsp;
-use api\qywork\model\GetUserinfoBy3rdRsp;
-use api\qywork\model\GetUserDetailBy3rdRsp;
-
 /*
  * Copyright (C) 2017 All rights reserved.
  *
- * @File ServiceCorpAPI.class.php
- * @Brief : 为服务商开放的接口, 使用应用授权的token
+ * @File ServiceProviderAPI.class.php
+ * @Brief : 为服务商开放的接口, 使用服务商的token
  * @Author abelzhu, abelzhu@tencent.com
  * @Version 1.0
  * @Date 2017-12-26
  *
  */
-class ServiceCorpAPI extends CorpAPI
+namespace api\qywork;
+
+use api\qywork\utils\Utils;
+use api\qywork\utils\HttpUtils;
+use api\qywork\model\GetLoginInfoRsp;
+use api\qywork\model\GetRegisterCodeReq;
+use api\qywork\model\GetRegisterInfoRsp;
+use api\qywork\model\SetAgentScopeReq;
+use api\qywork\model\SetAgentScopeRsp;
+
+class ServiceProviderAPI extends AbsAPI
 {
-    private $suite_id = null; // string
-    private $suite_secret = null; // string
-    private $suite_ticket = null; // string
-    
-    private $authCorpId = null; // string
-    private $permanentCode = null; // string
-    
-    private $suiteAccessToken = null; // string
-    
-    public function __construct(
-        $suite_id=null,
-        $suite_secret=null,
-        $suite_ticket=null,
-        $authCorpId=null,
-        $permanentCode=null)
-    {
-        $this->suite_id = $suite_id;
-        $this->suite_secret = $suite_secret;
-        $this->suite_ticket = $suite_ticket;
-        
-        // 调用 CorpAPI 的function， 需要设置这两个参数
-        $this->authCorpId = $authCorpId;
-        $this->permanentCode = $permanentCode;
-    }
+    private $corpid = null; // string
+    private $provider_secret = null; // string
+    private $provider_access_token = null; // string
     
     /**
-     * @brief RefreshAccessToken : override CorpAPI的函数，使用三方服务商的get_corp_token
-     *
-     * @return : string
+     * 调用SetAgentScope/SetContactSyncSuccess 两个接口可以不用传corpid/provider_secret
      */
-    protected function RefreshAccessToken()
+    public function __construct($corpid=null, $provider_secret=null)
     {
-        Utils::checkNotEmptyStr($this->authCorpId, "auth_corpid");
-        Utils::checkNotEmptyStr($this->permanentCode, "permanent_code");
-        $args = array(
-            "auth_corpid" => $this->authCorpId,
-            "permanent_code" => $this->permanentCode
-        );
-        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_corp_token?suite_access_token=SUITE_ACCESS_TOKEN");
-        $this->_HttpPostParseToJson($url, $args, false);
-        $this->_CheckErrCode();
-        
-        $this->accessToken = $this->rspJson["access_token"];
+        $this->corpid = $corpid;
+        $this->provider_secret = $provider_secret;
     }
     
-    /**
-     * @brief GetSuiteAccessToken : 获取第三方应用凭证
-     *
-     * @link https://work.weixin.qq.com/api/doc#10975/获取第三方应用凭证
-     *
-     * @note 调用者不用关心，本类会自动获取、更新
-     *
-     * @return : string
-     */
-    protected function GetSuiteAccessToken()
+    protected function GetProviderAccessToken()
     {
-        if ( ! Utils::notEmptyStr($this->suiteAccessToken)) {
-            $this->RefreshSuiteAccessToken();
+        if ( ! Utils::notEmptyStr($this->provider_access_token)) {
+            $this->RefreshProviderAccessToken();
         }
-        return $this->suiteAccessToken;
+        return $this->provider_access_token;
     }
-    protected function RefreshSuiteAccessToken()
+    protected function RefreshProviderAccessToken()
     {
-        Utils::checkNotEmptyStr($this->suite_id, "suite_id");
-        Utils::checkNotEmptyStr($this->suite_secret, "suite_secret");
-        Utils::checkNotEmptyStr($this->suite_ticket, "suite_ticket");
+        Utils::checkNotEmptyStr($this->corpid, "corpid");
+        Utils::checkNotEmptyStr($this->provider_secret, "provider_secret");
+        
         $args = array(
-            "suite_id" => $this->suite_id,
-            "suite_secret" => $this->suite_secret,
-            "suite_ticket" => $this->suite_ticket,
+            "corpid" => $this->corpid,
+            "provider_secret" => $this->provider_secret
         );
-        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_suite_token");
+        $url = HttpUtils::MakeUrl("/cgi-bin/service/get_provider_token");
         $this->_HttpPostParseToJson($url, $args, false);
         $this->_CheckErrCode();
         
-        $this->suiteAccessToken= $this->rspJson["suite_access_token"];
+        $this->provider_access_token = $this->rspJson["provider_access_token"];
     }
     
-    // ---------------------- 第三方开放接口 ----------------------------------
+    // ------------------------- 单点登录 -------------------------------------
     //
+    
+    /**
+     * @brief GetLoginInfo : 获取登录用户信息
+     *
+     * @link https://work.weixin.qq.com/api/doc#10991/获取登录用户信息
+     *
+     * @param $auth_code : string
+     *
+     * @return : GetLoginInfoRsp
+     */
+    public function GetLoginInfo($auth_code)
+    {
+        Utils::checkNotEmptyStr($auth_code, "auth_code");
+        $args = array("auth_code" => $auth_code);
+        self::_HttpCall(self::GET_LOGIN_INFO, 'POST', $args);
+        return  GetLoginInfoRsp::ParseFromArray($this->rspJson);
+    }
+    
+    // ------------------------- 注册定制化 -----------------------------------
     //
     /**
-     * @brief GetPreAuthCode : 获取预授权码
+     * @brief GetRegisterCode : 获取注册码
      *
-     * @link https://work.weixin.qq.com/api/doc#10975/获取预授权码
+     * @link https://work.weixin.qq.com/api/doc#11729/获取注册码
      *
-     * @return : string pre_auth_code
+     * @param $GetRegisterCodeReq
+     *
+     * @return : string register_code
      */
-    public function GetPreAuthCode()
+    public function GetRegisterCode(GetRegisterCodeReq $GetRegisterCodeReq)
     {
-        self::_HttpCall(self::GET_PRE_AUTH_CODE, 'GET', null);
-        return $this->rspJson["pre_auth_code"];
+        $args = $GetRegisterCodeReq->FormatArgs();
+        self::_HttpCall(self::GET_REGISTER_CODE, 'POST', $args);
+        return $this->rspJson["register_code"];
     }
     
     /**
-     * @brief SetSessionInfo : 设置授权配置
+     * @brief GetRegisterInfo : 查询注册状态
      *
-     * @link https://work.weixin.qq.com/api/doc#10975/设置授权配置
+     * @link https://work.weixin.qq.com/api/doc#11729/查询注册状态
      *
-     * @param $SetSessionInfoReq
+     * @param $register_code : string
+     *
+     * @return : GetRegisterInfoRsp
      */
-    public function SetSessionInfo( SetSessionInfoReq $SetSessionInfoReq)
+    public function GetRegisterInfo($register_code)
     {
-        $args = $SetSessionInfoReq->FormatArgs();
-        self::_HttpCall(self::SET_SESSION_INFO, 'POST', $args);
+        Utils::checkNotEmptyStr($register_code, "register_code");
+        $args = array("register_code" => $register_code);
+        self::_HttpCall(self::GET_REGISTER_INFO, 'POST', $args);
+        return GetRegisterInfoRsp::ParseFromArray($this->rspJson);
     }
     
     /**
-     * @brief GetPermanentCode : 获取企业永久授权码
+     * @brief SetAgentScope : 设置授权应用可见范围
      *
-     * @link https://work.weixin.qq.com/api/doc#10975/获取企业永久授权码
+     * @link https://work.weixin.qq.com/api/doc#11729/设置授权应用可见范围
      *
-     * @param $temp_auth_code : string 临时授权码
+     * @param $access_token : 该接口只能使用注册完成回调事件或者查询注册状态返回的access_token
+     * @param $SetAgentScopeReq : SetAgentScopeReq
      *
-     * @return : GetPermanentCodeRsp
+     * @return : SetAgentScopeRsp
      */
-    public function GetPermanentCode($temp_auth_code)
+    public function SetAgentScope($access_token, SetAgentScopeReq $SetAgentScopeReq)
     {
-        $args = array("auth_code" => $temp_auth_code);
-        self::_HttpCall(self::GET_PERMANENT_CODE, 'POST', $args);
-        return GetPermanentCodeRsp::ParseFromArray($this->rspJson);
+        $args = $SetAgentScopeReq->FormatArgs();
+        self::_HttpCall(self::SET_AGENT_SCOPE."?access_token={$access_token}", 'POST', $args);
+        return  SetAgentScopeRsp::ParseFromArray($this->rspJson);
     }
     
     /**
-     * @brief GetAuthInfo : 获取企业授权信息
+     * @brief SetContactSyncSuccess : 设置通讯录同步完成
      *
-     * @link https://work.weixin.qq.com/api/doc#10975/获取企业授权信息
+     * @link https://work.weixin.qq.com/api/doc#11729/设置通讯录同步完成
      *
-     * @param $auth_corpid : string
-     * @param $permanent_code : 永久授权码
-     *
-     * @return : GetAuthInfoRsp
+     * @param $access_token : 该接口只能使用注册完成回调事件或者查询注册状态返回的access_token
      */
-    public function GetAuthInfo($auth_corpid, $permanent_code)
+    public function SetContactSyncSuccess($access_token)
     {
-        Utils::checkNotEmptyStr($auth_corpid, "auth_corpid");
-        Utils::checkNotEmptyStr($permanent_code, "permanent_code");
-        $args = array(
-            "auth_corpid" => $auth_corpid,
-            "permanent_code" => $permanent_code
-        );
-        self::_HttpCall(self::GET_AUTH_INFO, 'POST', $args);
-        return  GetAuthInfoRsp::ParseFromArray($this->rspJson);
-    }
-    
-    /**
-     * @brief GetAdminList : 获取应用的管理员列表
-     *
-     * @link https://work.weixin.qq.com/api/doc#10975/获取应用的管理员列表
-     *
-     * @param $auth_corpid : string
-     * @param $agentid : uint
-     *
-     * @return  : GetAdminListRsp
-     */
-    public function GetAdminList($auth_corpid, $agentid)
-    {
-        Utils::checkNotEmptyStr($auth_corpid, "auth_corpid");
-        Utils::checkIsUInt($agentid, "agentid");
-        $args = array(
-            "auth_corpid" => $auth_corpid,
-            "agentid" => $agentid
-        );
-        self::_HttpCall(self::GET_ADMIN_LIST, 'POST', $args);
-        return GetAdminListRsp::ParseFromArray($this->rspJson);
-    }
-    
-    /**
-     * @brief GetUserinfoBy3rd :第三方根据code获取企业成员信息
-     *
-     * @link https://work.weixin.qq.com/api/doc#10975/第三方根据code获取企业成员信息
-     *
-     * @param $code : string
-     *
-     * @return  : GetUserinfoBy3rdRsp
-     */
-    public function GetUserinfoBy3rd($code)
-    {
-        self::_HttpCall(self::GET_USER_INFO_BY_3RD, 'GET', array('code'=>$code));
-        return GetUserinfoBy3rdRsp::ParseFromArray($this->rspJson);
-    }
-    
-    /**
-     * @brief GetUserDetailBy3rd : 第三方使用user_ticket获取成员详情
-     *
-     * @link https://work.weixin.qq.com/api/doc#10975/第三方使用user_ticket获取成员详情
-     *
-     * @param $user_ticket : string
-     *
-     * @return  : GetUserDetailBy3rdRsp
-     */
-    public function GetUserDetailBy3rd($user_ticket)
-    {
-        Utils::checkNotEmptyStr($user_ticket, "user_ticket");
-        $args = array("user_ticket" => $user_ticket);
-        self::_HttpCall(self::GET_USER_DETAIL_BY_3RD, 'POST', $args);
-        return  GetUserDetailBy3rdRsp::ParseFromArray($this->rspJson);
+        self::_HttpCall(self::SET_CONTACT_SYNC_SUCCESS."?access_token={$access_token}", 'GET', null);
     }
 }
 
