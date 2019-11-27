@@ -15,8 +15,9 @@
 	"autoload" : {
 		"psr-4" : {
 			"api\\qywork\\" : "src/library/qywork",
-			"api\\qywork\\utils\\" :"src/library/qywork/utils"
-		
+			"api\\qywork\\utils\\" : "src/library/qywork/utils",
+			"api\\qywork\\model\\" : "src/library/qywork/datastructure"
+			
 		}
 	}
 }
