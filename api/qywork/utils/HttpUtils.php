@@ -63,10 +63,10 @@ class HttpUtils
      */
     static public function httpGet($url)
     {
-        $config = require(__DIR__.'./../config.php');
-        if (true == $config['DEBUG']) {
-            echo $url . "\n";
-        }
+        //$config = require(__DIR__.'./../config.php');
+       // if (true == $config['DEBUG']) {
+            //echo $url . "\n";
+       // }
         
         self::__checkDeps();
         $ch = curl_init();
@@ -87,10 +87,10 @@ class HttpUtils
      */
     static public function httpPost($url, $postData)
     {
-        $config = require(__DIR__.'./../config.php');
-        if (true == $config['DEBUG']) {
-            echo $url . " -d $postData\n";
-        }
+       // $config = require(__DIR__.'./../config.php');
+        //if (true == $config['DEBUG']) {
+        //    echo $url . " -d $postData\n";
+        //}
         
         self::__checkDeps();
         $ch = curl_init();
